@@ -12,10 +12,13 @@ from sklearn.metrics import accuracy_score, classification_report
 import numpy as np
 import pandas as pd
 import anndata as ad
-import scanpy as sc
 import os
 import sys
 import argparse
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
 
 # Add the main module to path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
@@ -48,7 +51,7 @@ def build_parser():
     parser.add_argument(
         "--model_path",
         type=str,
-        default="../results/domain_model.pth",
+        default="results/domain_model.pth",
         help="Path to pre-trained domain model"
     )
     parser.add_argument(
@@ -132,7 +135,7 @@ def train_classifier(model, classifier, train_loader, val_loader,
             batch_y = batch_y.to(device)
             
             with torch.no_grad():
-                embeddings = model(batch_x)
+                embeddings = model.get_embeddings(batch_x)
             
             optimizer.zero_grad()
             outputs = classifier(embeddings)
@@ -153,7 +156,7 @@ def train_classifier(model, classifier, train_loader, val_loader,
                 batch_x = batch_x.to(device)
                 batch_y = batch_y.to(device)
                 
-                embeddings = model(batch_x)
+                embeddings = model.get_embeddings(batch_x)
                 outputs = classifier(embeddings)
                 predictions = torch.argmax(outputs, dim=1)
                 
@@ -169,6 +172,22 @@ def train_classifier(model, classifier, train_loader, val_loader,
         print(f"  Val Accuracy: {val_accuracy:.4f}")
     
     return classifier, train_losses, val_accuracies
+
+def find_model_file(model_path):
+    """Find the model file in various possible locations."""
+    possible_paths = [
+        model_path,
+        os.path.join(os.path.dirname(__file__), '..', model_path),
+        os.path.join(os.getcwd(), model_path),
+        os.path.join(os.getcwd(), 'results', 'domain_model.pth'),
+        os.path.join(os.path.dirname(__file__), '..', 'results', 'domain_model.pth')
+    ]
+    
+    for path in possible_paths:
+        if os.path.exists(path):
+            return path
+    
+    return None
 
 def main():
     """Run script"""
@@ -212,11 +231,17 @@ def main():
         max_length=args.max_length
     )
     
-    if os.path.exists(args.model_path):
-        model.load_state_dict(torch.load(args.model_path, map_location='cpu'))
-        print("Loaded pre-trained model")
+    model_file = find_model_file(args.model_path)
+    if model_file and os.path.exists(model_file):
+        try:
+            model.load_state_dict(torch.load(model_file, map_location='cpu'))
+            print(f"Loaded pre-trained model from: {model_file}")
+        except Exception as e:
+            print(f"Warning: Could not load model from {model_file}: {e}")
+            print("Using random weights.")
     else:
-        print("Warning: No pre-trained model found. Using random weights.")
+        print(f"Warning: No pre-trained model found at {args.model_path}")
+        print("Using random weights.")
     
     # Initialize classifier
     num_classes = len(np.unique(labels))
@@ -241,7 +266,7 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     model.eval()
     with torch.no_grad():
-        embeddings = model(tokenized.to(device)).cpu().numpy()
+        embeddings = model.get_embeddings(tokenized.to(device)).cpu().numpy()
     
     obs_df = pd.DataFrame({
         'protein_code': protein_codes,

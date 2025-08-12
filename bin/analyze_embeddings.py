@@ -12,6 +12,10 @@ import seaborn as sns
 import os
 import sys
 import argparse
+import warnings
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
 
 def build_parser():
     """CLI parser"""
@@ -49,7 +53,7 @@ def analyze_embeddings(adata, resolution=0.5, n_comps=50):
     # Dimensionality reduction
     sc.pp.pca(adata, n_comps=n_comps)
     sc.pp.neighbors(adata)
-    sc.tl.leiden(adata, resolution=resolution)
+    sc.tl.leiden(adata, resolution=resolution, flavor="igraph", n_iterations=2)
     sc.tl.umap(adata)
     
     return adata
@@ -58,12 +62,30 @@ def create_visualizations(adata, output_dir):
     """Create various visualizations."""
     
     # UMAP plot colored by clusters
-    sc.pl.umap(adata, color='leiden', save='_clusters.png')
+    plt.figure(figsize=(12, 10))
+    scatter = plt.scatter(adata.obsm['X_umap'][:, 0], 
+                         adata.obsm['X_umap'][:, 1], 
+                         c=adata.obs['leiden'].astype('category').cat.codes,
+                         cmap='viridis', alpha=0.6, s=20)
+    plt.colorbar(scatter, label='Cluster')
+    plt.title('Domain Sequence Clusters (UMAP)', fontsize=16)
+    plt.xlabel('UMAP 1', fontsize=12)
+    plt.ylabel('UMAP 2', fontsize=12)
+    plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'umap_clusters.png'), dpi=300, bbox_inches='tight')
     plt.close()
     
     # PCA plot
-    sc.pl.pca(adata, color='leiden', save='_pca.png')
+    plt.figure(figsize=(12, 10))
+    scatter = plt.scatter(adata.obsm['X_pca'][:, 0], 
+                         adata.obsm['X_pca'][:, 1], 
+                         c=adata.obs['leiden'].astype('category').cat.codes,
+                         cmap='viridis', alpha=0.6, s=20)
+    plt.colorbar(scatter, label='Cluster')
+    plt.title('Domain Sequence Clusters (PCA)', fontsize=16)
+    plt.xlabel('PC 1', fontsize=12)
+    plt.ylabel('PC 2', fontsize=12)
+    plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'pca_clusters.png'), dpi=300, bbox_inches='tight')
     plt.close()
     
