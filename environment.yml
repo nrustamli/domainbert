@@ -11,6 +11,7 @@ dependencies:
   - matplotlib>=3.5
   - seaborn>=0.11
   - pytorch>=1.12
+  - pytorch-cuda=12.1
   - torchvision
   - torchaudio
   - anndata>=0.8
